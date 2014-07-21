@@ -1,6 +1,5 @@
 package com.elvizlai.jishi;
 
-import android.content.Intent;
 import android.support.v7.app.ActionBarActivity;
 import android.os.Bundle;
 import android.view.Menu;
@@ -15,7 +14,7 @@ public class Main extends ActionBarActivity {
         setContentView(R.layout.main);
 
         //registerReceiver()
-        startService(new Intent(this,TimeService.class));
+       // startService(new Intent(this,TimeService.class));
     }
 
 

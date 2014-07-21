@@ -11,11 +11,11 @@ import android.content.IntentFilter;
 import android.content.pm.PackageManager;
 import android.content.pm.ResolveInfo;
 import android.os.IBinder;
+import android.text.format.Time;
 import android.util.Log;
 import android.widget.RemoteViews;
 
 import java.util.ArrayList;
-import java.util.Calendar;
 import java.util.List;
 import java.util.Timer;
 import java.util.TimerTask;
@@ -28,21 +28,36 @@ public class TimeService extends Service {
     final String TAG = "ElvizLai";
     final String SCREEN_ON = "android.intent.action.SCREEN_ON";
     final String SCREEN_OFF = "android.intent.action.SCREEN_OFF";
-    final private Timer totalTimer = new Timer();
-    private int isClockOn = 1;
+    final String USER_PRESENT = "android.intent.action.USER_PRESENT";
+    final private Time time = new Time();//用来获取当前时间
+    private Timer totalTimer = new Timer();//计时器
+    private int isClockOn = 1;//用来存储屏幕的状态 1表示开启，0表示关闭
+
+    private Context context;
+    private AppWidgetManager appWidgetManager;
+    private ComponentName thisWidget;
+    private int[] appWidgetIds;
+
+
     final private BroadcastReceiver dynamicReceiver = new BroadcastReceiver() {
-        //动态广播的Receiver
+        //接收系统广播
         @Override
         public void onReceive(Context context, Intent intent) {
-           // Log.d(TAG, "Broadcast on receive");
+            // Log.d(TAG, "Broadcast on receive");
             if (intent.getAction().equals(SCREEN_ON)) {
                 Log.d(TAG, "Screen ON!");
+                //用解锁来替代
                 //updateWidgets();
-                isClockOn = 1;
+                //isClockOn = 1;
             }
             if (intent.getAction().equals(SCREEN_OFF)) {
                 Log.d(TAG, "Screen OFF!");
                 isClockOn = 0;
+            }
+
+            if (intent.getAction().equals(USER_PRESENT)) {
+                Log.d(TAG, "USER_PRESENT!");
+                isClockOn = 1;
             }
         }
     };
@@ -59,17 +74,42 @@ public class TimeService extends Service {
 
         Log.d(TAG, "Service on create");
 
+        context = getBaseContext();
+        appWidgetManager = AppWidgetManager.getInstance(context);
+        thisWidget = new ComponentName(context, AppWidget.class);
+        appWidgetIds = appWidgetManager.getAppWidgetIds(thisWidget);
+
+
+        //广播注册
         IntentFilter dynamic_filter = new IntentFilter();
         dynamic_filter.addAction(SCREEN_ON);            //添加动态广播的Action
         dynamic_filter.addAction(SCREEN_OFF);
+        dynamic_filter.addAction(USER_PRESENT);
         registerReceiver(dynamicReceiver, dynamic_filter);    // 注册自定义动态广播消息
 
+        //1s的定时器，准备用alarm来替换
         totalTimer.schedule(new TimeUpdateTask(), 0, 1000);
+
     }
 
-    private void updateSecond(Calendar date, int number) {
+    @Override
+    public void onDestroy() {
+        super.onDestroy();
+        System.out.println("Service onDestroy");
+        //注销广播
+        unregisterReceiver(dynamicReceiver);
+        totalTimer.cancel();
+        totalTimer = null;
+    }
+
+    /**
+     * @param date   时间
+     * @param number 自视图的编号 1~5 0是特殊的
+     */
+
+    private void updateSecond(Time date, int number) {
         //Log.d(TAG, "updateSecond");
-        int second = date.get(Calendar.SECOND);
+        int second = date.second;
 
         String nextSecond = (second + 1) < 10 ? "0" + (second + 1) : (second + 1 + "");
         if (second == 59) {
@@ -83,11 +123,7 @@ public class TimeService extends Service {
 
         // System.out.println(padding);
 
-        Context context = getBaseContext();
-        AppWidgetManager appWidgetManager = AppWidgetManager.getInstance(context);
-        ComponentName thisWidget = new ComponentName(context, AppWidget.class);
-
-        int[] appWidgetIds = appWidgetManager.getAppWidgetIds(thisWidget);
+        //int[] appWidgetIds = appWidgetManager.getAppWidgetIds(thisWidget);
 
         for (int id : appWidgetIds) {
             RemoteViews views = new RemoteViews(context.getPackageName(), R.layout.time_layout);
@@ -96,12 +132,11 @@ public class TimeService extends Service {
         }
     }
 
-    private void updateMinute(Calendar date, int number) {
+    private void updateMinute(Time date, int number) {
 
         //Log.d(TAG, "updateMinute");
 
-
-        int minute = date.get(Calendar.MINUTE);
+        int minute = date.minute;
 
         String nextMinute = (minute + 1) < 10 ? "0" + (minute + 1) : (minute + 1 + "");
         if (minute == 59) {
@@ -109,18 +144,23 @@ public class TimeService extends Service {
         }
 
         String padding = "flip_" + (minute < 10 ? "0" + minute : minute);
-        if (date.get(Calendar.SECOND) == 59 && number != 0) {
+        if (date.second == 59 && number != 0) {
             padding = "flip_" + (minute < 10 ? "0" + minute : minute) + "_" + nextMinute + "_" + number;
         }
+
+//        Context context = getBaseContext();
+//        AppWidgetManager appWidgetManager = AppWidgetManager.getInstance(context);
+//        RemoteViews views = new RemoteViews(context.getPackageName(), R.layout.time_layout);
+//        views.setImageViewResource(R.id.minute, getResources().getIdentifier(padding, "drawable", PACKAGESTR));
 
 
         // System.out.println(padding);
 
-        Context context = getBaseContext();
-        AppWidgetManager appWidgetManager = AppWidgetManager.getInstance(context);
-        ComponentName thisWidget = new ComponentName(context, AppWidget.class);
-
-        int[] appWidgetIds = appWidgetManager.getAppWidgetIds(thisWidget);
+//        Context context = getBaseContext();
+//        AppWidgetManager appWidgetManager = AppWidgetManager.getInstance(context);
+//        ComponentName thisWidget = new ComponentName(context, AppWidget.class);
+//
+        // int[] appWidgetIds = appWidgetManager.getAppWidgetIds(thisWidget);
 
         for (int id : appWidgetIds) {
             RemoteViews views = new RemoteViews(context.getPackageName(), R.layout.time_layout);
@@ -129,11 +169,11 @@ public class TimeService extends Service {
         }
     }
 
-    private void updateHour(Calendar date, int number) {
+    private void updateHour(Time date, int number) {
 
         //Log.d(TAG, "updateHour");
 
-        int hour = date.get(Calendar.HOUR);
+        int hour = date.hour;
 
         String nextHour = (hour + 1) < 10 ? "0" + (hour + 1) : (hour + 1 + "");
         if (hour == 59) {
@@ -141,17 +181,13 @@ public class TimeService extends Service {
         }
 
         String padding = "flip_" + (hour < 10 ? "0" + hour : hour);
-        if (date.get(Calendar.MINUTE) == 59 && number != 0) {
+        if (date.second == 59 && date.minute == 59 && number != 0) {
             padding = "flip_" + (hour < 10 ? "0" + hour : hour) + "_" + nextHour + "_" + number;
         }
 
         //System.out.println(padding);
 
-        Context context = getBaseContext();
-        AppWidgetManager appWidgetManager = AppWidgetManager.getInstance(context);
-        ComponentName thisWidget = new ComponentName(context, AppWidget.class);
-
-        int[] appWidgetIds = appWidgetManager.getAppWidgetIds(thisWidget);
+        //int[] appWidgetIds = appWidgetManager.getAppWidgetIds(thisWidget);
 
         for (int id : appWidgetIds) {
             RemoteViews views = new RemoteViews(context.getPackageName(), R.layout.time_layout);
@@ -193,28 +229,35 @@ public class TimeService extends Service {
 
         @Override
         public void run() {
-            if (!isHome() || isClockOn == 0) {
+            if (!isHome() || isClockOn == 0 || totalTimer == null) {
                 return;
             }
 
+
             Log.d(TAG, "Timer is running");
 
-            Calendar calendar = Calendar.getInstance();
+            //Calendar cal = Calendar.getInstance();
 
-            totalTimer.schedule(new Timer2Flip(calendar, 0), 0);
-            totalTimer.schedule(new Timer2Flip(calendar, 1), 1000 - 400);
-            totalTimer.schedule(new Timer2Flip(calendar, 2), 1000 - 350);
-            totalTimer.schedule(new Timer2Flip(calendar, 3), 1000 - 250);
-            totalTimer.schedule(new Timer2Flip(calendar, 4), 1000 - 200);
-            totalTimer.schedule(new Timer2Flip(calendar, 5), 1000 - 100);
+
+            time.setToNow();
+//            System.out.println(time.hour + "");
+//            System.out.println(time.minute + "");
+//            System.out.println(time.second + "");
+
+            totalTimer.schedule(new Timer2Flip(time, 0), 0);
+            totalTimer.schedule(new Timer2Flip(time, 1), 600);
+            totalTimer.schedule(new Timer2Flip(time, 2), 680);
+            totalTimer.schedule(new Timer2Flip(time, 3), 760);
+            totalTimer.schedule(new Timer2Flip(time, 4), 840);
+            totalTimer.schedule(new Timer2Flip(time, 5), 920);
         }
     }
 
     private class Timer2Flip extends TimerTask {
         int number;
-        Calendar date;
+        Time date;
 
-        Timer2Flip(Calendar date, int number) {
+        Timer2Flip(Time date, int number) {
             this.date = date;
             this.number = number;
         }
